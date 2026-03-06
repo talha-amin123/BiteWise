@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "BiteWise",
+  "version": "1.0",
+  "description": "Food recall safety checker for Instacart",
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:5000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.instacart.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
