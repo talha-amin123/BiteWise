@@ -3,13 +3,6 @@ from rapidfuzz import fuzz
 
 DB_PATH = "data/bitewise.db"
 
-# Common filler words to strip from company names
-FILLER = {
-    "inc", "llc", "co", "corp", "corporation", "company", "foods", "food",
-    "products", "product", "enterprises", "group", "the", "of", "and",
-    "ltd", "limited", "dba", "usa", "us"
-}
-
 
 def load_recalls():
     """Load all active, non-Spanish recalls with their products"""
@@ -45,72 +38,78 @@ def load_recalls():
 
 
 def normalize(text):
-    """Lowercase and collapse whitespace"""
     if not text:
         return ""
     return " ".join(text.lower().split())
 
 
-def extract_key_words(text):
-    """Extract meaningful words from a company/brand name"""
-    if not text:
-        return set()
-    cleaned = text.replace(",", "").replace(".", "").replace("'", "").replace("&#039;", "")
-    words = [w for w in cleaned.lower().split() if w not in FILLER and len(w) > 4]
-    return set(words)
+def hybrid_brand_score(brand, target):
+    """
+    Hybrid brand matching score.
+    Blends multiple fuzzy signals with a length penalty.
+
+    - ratio: strict character-by-character similarity
+    - token_sort_ratio: handles word reordering
+    - partial_ratio: finds best substring match
+    - len_ratio: penalizes when strings are very different lengths
+
+    This prevents short generic words like "signature" from
+    matching long brand names like "kirkland signature".
+    """
+    if not brand or not target:
+        return 0
+
+    exact = fuzz.ratio(brand, target)
+    sorted_score = fuzz.token_sort_ratio(brand, target)
+    partial = fuzz.partial_ratio(brand, target)
+    len_ratio = min(len(brand), len(target)) / max(len(brand), len(target))
+
+    score = (exact * 0.3) + (sorted_score * 0.3) + (partial * 0.2) + (len_ratio * 100 * 0.2)
+    return score
+
+
+def hybrid_product_score(product, target):
+    """
+    Hybrid product matching score.
+    More forgiving than brand matching since product names
+    vary wildly between retailer and recall descriptions.
+
+    - token_set_ratio: ignores word order and extra words (best for products)
+    - token_sort_ratio: rewards same words in any order
+    - partial_ratio: finds substring matches
+    """
+    if not product or not target:
+        return 0
+
+    set_score = fuzz.token_set_ratio(product, target)
+    sorted_score = fuzz.token_sort_ratio(product, target)
+    partial = fuzz.partial_ratio(product, target)
+
+    score = (set_score * 0.4) + (sorted_score * 0.35) + (partial * 0.25)
+    return score
 
 
 def brand_match(brand_norm, recall_brand, recall_company):
     """
-    Match Instacart brand against recall brand/company.
-    Returns score 0-100.
-
-    Strategy:
-    1. Direct fuzzy match against brand_name and company_name fields
-    2. Extract key words from company name → check if any appear in brand
-    3. Check if brand appears as substring in company or vice versa
+    Match Instacart brand against recall brand and company name.
+    Returns the best score from both comparisons.
     """
-    if not brand_norm:
-        return 0
-
-    # Direct fuzzy match
-    score_brand = fuzz.token_set_ratio(brand_norm, recall_brand) if recall_brand else 0
-    score_company = fuzz.token_set_ratio(brand_norm, recall_company) if recall_company else 0
-
-    # Key word match: "rosina" from "Rosina Food Products, Inc."
-    company_words = extract_key_words(recall_company)
-    brand_words = extract_key_words(recall_brand)
-    all_key_words = company_words | brand_words
-
-    keyword_score = 0
-    for word in all_key_words:
-        if word in brand_norm or brand_norm in word:
-            keyword_score = 100
-            break
-
-    # Substring check: "chips ahoy" in "chips ahoy!" or vice versa
-    substring_score = 0
-    if recall_brand and (brand_norm in recall_brand or recall_brand in brand_norm):
-        substring_score = 95
-    if recall_company and (brand_norm in recall_company or recall_company in brand_norm):
-        substring_score = max(substring_score, 90)
-
-    return max(score_brand, score_company, keyword_score, substring_score)
+    score_brand = hybrid_brand_score(brand_norm, recall_brand)
+    score_company = hybrid_brand_score(brand_norm, recall_company)
+    return max(score_brand, score_company)
 
 
-def product_match(product_norm, recall_product, raw_detail, recall_title):
+def product_match(product_norm, brand_norm, recall_product, raw_detail, recall_title):
     """
     Match Instacart product name against recall product fields.
-    Returns score 0-100.
-
-    Strategy:
-    1. token_set_ratio against product_description (best for reordered words)
-    2. token_set_ratio against raw_detail (may have more info)
-    3. token_set_ratio against announcement title (contains product info)
+    Strips brand from product name first to avoid inflated scores.
     """
-    score_desc = fuzz.token_set_ratio(product_norm, recall_product) if recall_product else 0
-    score_raw = fuzz.token_set_ratio(product_norm, raw_detail) if raw_detail else 0
-    score_title = fuzz.token_set_ratio(product_norm, recall_title) if recall_title else 0
+    # Remove brand name from product to compare just the product part
+    product_clean = product_norm.replace(brand_norm, "").strip() if brand_norm else product_norm
+
+    score_desc = hybrid_product_score(product_clean, recall_product)
+    score_raw = hybrid_product_score(product_clean, raw_detail)
+    score_title = hybrid_product_score(product_clean, recall_title)
 
     return max(score_desc, score_raw, score_title)
 
@@ -119,11 +118,10 @@ def match_product(brand, product_name, size=None, brand_threshold=75, product_th
     """
     Match an Instacart product against the recall database.
 
-    Tier 1: Brand match (brand vs recall_brand_name + recall_company_name)
-            → Must pass brand_threshold to continue
-    Tier 2: Product match (product_name vs product_description + raw_detail + title)
-            → If passes product_threshold → "high" match
-            → If brand passed but product didn't → "warning" match
+    Tier 1: Brand match → must pass brand_threshold
+    Tier 2: Product match
+            → passes product_threshold → "high"
+            → brand passed but product didn't → "warning"
 
     Returns list of matches sorted by score, deduplicated by recall_id.
     """
@@ -146,7 +144,7 @@ def match_product(brand, product_name, size=None, brand_threshold=75, product_th
             continue
 
         # Tier 2: Product match
-        p_score = product_match(product_norm, recall_product, raw_detail, recall_title)
+        p_score = product_match(product_norm, brand_norm, recall_product, raw_detail, recall_title)
 
         # Categorize
         if p_score >= product_threshold:
@@ -159,8 +157,8 @@ def match_product(brand, product_name, size=None, brand_threshold=75, product_th
         matches.append({
             "recall_id": row["recall_id"],
             "score": combined_score,
-            "brand_score": b_score,
-            "product_score": p_score,
+            "brand_score": round(b_score, 1),
+            "product_score": round(p_score, 1),
             "match_level": match_level,
             "recall_source": row["recall_source"],
             "recall_announcement_title": row["recall_announcement_title"],
@@ -197,6 +195,7 @@ if __name__ == "__main__":
         ("forward farms", "Forward Farms 85% Lean/15% Fat Ground Beef"),
         ("hormel compleats", "HORMEL COMPLEATS Chicken Breast & Gravy With Mashed Potatoes, 10 OZ"),
         ("golden island", "Golden Island Pork Snack Bites, Korean Barbecue, 1.5 oz, 12 ct"),
+        ("kirkland signature", "Kirkland Signature Grass-Fed Beef Sticks, 1.15 oz, 12 ct")
     ]
 
     for brand, product in test_cases:

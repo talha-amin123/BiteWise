@@ -1,40 +1,7 @@
 // BiteWise Content Script
-// Product page: extracts info and shows recall banner
-// Cart page: scans cart items and shows summary card
+// Extracts product info from Instacart product pages and checks for recalls
 
 const API_URL = "http://127.0.0.1:5000/check";
-
-// ========== SHARED UTILITIES ==========
-
-function formatDate(dateStr) {
-  if (!dateStr) return "Unknown date";
-  const clean = dateStr.split("T")[0];
-  const parts = clean.split("-");
-  if (parts.length !== 3) return dateStr;
-  const d = new Date(parts[0], parts[1] - 1, parts[2]);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-async function checkRecalls(brand, productName, size) {
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        brand: brand || "",
-        product_name: productName || "",
-        size: size || "",
-      }),
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error("BiteWise: Could not reach API —", err.message);
-    return null;
-  }
-}
-
-// ========== PRODUCT PAGE ==========
 
 function extractProductData() {
   const nameEl = document.querySelector("h1 span.e-1r7vnds");
@@ -49,17 +16,24 @@ function extractProductData() {
   return { productName, brand, size };
 }
 
-function injectProductBanner(level, recallInfo, instacartBrand) {
+function formatDate(dateStr) {
+  if (!dateStr) return "Unknown date";
+  const clean = dateStr.split("T")[0];
+  const parts = clean.split("-");
+  if (parts.length !== 3) return dateStr;
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function injectBanner(level, recallInfo, instacartBrand) {
   const existing = document.getElementById("bitewise-banner");
   if (existing) existing.remove();
 
   const banner = document.createElement("div");
   banner.id = "bitewise-banner";
 
-  // Use the brand name from Instacart page, not from API
   const rawBrand = instacartBrand || (recallInfo ? recallInfo.recall_company_name : "");
   const displayBrand = rawBrand.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-
 
   if (level === "high") {
     banner.innerHTML = `
@@ -236,7 +210,26 @@ function injectLoadingBanner() {
   }
 }
 
-async function runProductPage() {
+async function checkRecalls(data) {
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        brand: data.brand,
+        product_name: data.productName,
+        size: data.size,
+      }),
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (err) {
+    console.error("BiteWise: Could not reach API —", err.message);
+    return null;
+  }
+}
+
+async function run() {
   const data = extractProductData();
   console.log("🔍 BiteWise Extracted:", JSON.stringify(data, null, 2));
 
@@ -247,7 +240,7 @@ async function runProductPage() {
 
   injectLoadingBanner();
 
-  const result = await checkRecalls(data.brand, data.productName, data.size);
+  const result = await checkRecalls(data);
 
   if (!result) {
     const existing = document.getElementById("bitewise-banner");
@@ -256,326 +249,55 @@ async function runProductPage() {
   }
 
   console.log(`🔍 BiteWise: ${result.match_count} match(es) found`);
+  if (result.matches && result.matches.length > 0) {
+    console.log("🔍 BiteWise Matches:", JSON.stringify(result.matches, null, 2));
+  }
 
   if (result.matches && result.matches.length > 0) {
     const highMatch = result.matches.find(m => m.match_level === "high");
     const warningMatch = result.matches.find(m => m.match_level === "warning");
 
     if (highMatch) {
-      injectProductBanner("high", highMatch, data.brand);
+      injectBanner("high", highMatch, data.brand);
     } else if (warningMatch) {
-      injectProductBanner("warning", warningMatch, data.brand);
+      injectBanner("warning", warningMatch, data.brand);
     } else {
-      injectProductBanner("safe", null, null);
+      injectBanner("safe", null, null);
     }
   } else {
-    injectProductBanner("safe", null, null);
+    injectBanner("safe", null, null);
   }
 }
 
-// ========== CART PAGE ==========
-
-function extractCartItems() {
-  const items = [];
-  const cartGroups = document.querySelectorAll('div[role="group"].e-b311fy');
-
-  cartGroups.forEach(group => {
-    const nameEl = group.querySelector("h3.e-z2c0se");
-    if (nameEl) {
-      const fullName = nameEl.textContent.trim();
-      // Remove trailing size info in parentheses like "(1.15 oz)" or "(each)"
-      const cleanName = fullName.replace(/\s*\([^)]*\)\s*$/, "").trim();
-      items.push({ fullName: cleanName });
-    }
-  });
-
-  return items;
-}
-
-function buildCartCard(results, totalItems) {
-  const recalled = results.filter(r => r.level === "high");
-  const caution = results.filter(r => r.level === "warning");
-  const safeCount = totalItems - recalled.length - caution.length;
-  const flaggedCount = recalled.length + caution.length;
-
-  let itemsHtml = "";
-
-  // Recalled items
-  if (recalled.length > 0) {
-    itemsHtml += `<div style="font-weight: 700; font-size: 13px; color: #dc2626; margin-bottom: 8px;">RECALLED (${recalled.length})</div>`;
-    recalled.forEach(item => {
-      itemsHtml += `
-        <div style="
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          border-radius: 8px;
-          padding: 10px 12px;
-          margin-bottom: 8px;
-        ">
-          <div style="display: flex; align-items: start; gap: 8px;">
-            <span style="font-size: 14px; margin-top: 1px;">🔴</span>
-            <div style="flex: 1;">
-              <div style="font-weight: 600; font-size: 13px; color: #1f2937; margin-bottom: 2px;">
-                ${item.name}
-              </div>
-              <div style="font-size: 12px; color: #6b7280;">
-                ${item.match.recall_reason}
-              </div>
-              <a href="${item.match.recall_url}" target="_blank" style="
-                font-size: 12px;
-                color: #dc2626;
-                text-decoration: none;
-                font-weight: 600;
-              ">View Recall →</a>
-            </div>
-          </div>
-        </div>
-      `;
-    });
-  }
-
-  // Caution items
-  if (caution.length > 0) {
-    itemsHtml += `<div style="font-weight: 700; font-size: 13px; color: #d97706; margin-bottom: 8px; ${recalled.length > 0 ? 'margin-top: 12px;' : ''}">CAUTION (${caution.length})</div>`;
-    caution.forEach(item => {
-      itemsHtml += `
-        <div style="
-          background: #fffbeb;
-          border: 1px solid #fde68a;
-          border-radius: 8px;
-          padding: 10px 12px;
-          margin-bottom: 8px;
-        ">
-          <div style="display: flex; align-items: start; gap: 8px;">
-            <span style="font-size: 14px; margin-top: 1px;">🟡</span>
-            <div style="flex: 1;">
-              <div style="font-weight: 600; font-size: 13px; color: #1f2937; margin-bottom: 2px;">
-                ${item.name}
-              </div>
-              <div style="font-size: 12px; color: #6b7280;">
-                Brand has active recalls • ${item.match.recall_reason}
-              </div>
-              <a href="${item.match.recall_url}" target="_blank" style="
-                font-size: 12px;
-                color: #d97706;
-                text-decoration: none;
-                font-weight: 600;
-              ">View Recall →</a>
-            </div>
-          </div>
-        </div>
-      `;
-    });
-  }
-
-  // Safe items
-  if (safeCount > 0) {
-    itemsHtml += `
-      <div style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 0;
-        ${flaggedCount > 0 ? 'margin-top: 8px;' : ''}
-        font-size: 13px;
-        color: #166534;
-      ">
-        <span>✅</span>
-        <span style="font-weight: 600;">${safeCount} other item${safeCount > 1 ? 's' : ''} — no recalls</span>
-      </div>
-    `;
-  }
-
-  // Header color based on severity
-  let headerBg, headerColor;
-  if (recalled.length > 0) {
-    headerBg = "#dc2626";
-    headerColor = "white";
-  } else if (caution.length > 0) {
-    headerBg = "#f59e0b";
-    headerColor = "white";
-  } else {
-    headerBg = "#16a34a";
-    headerColor = "white";
-  }
-
-  return `
-    <div style="
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      overflow: hidden;
-      margin: 16px;
-      max-width: 360px;
-    ">
-      <div style="
-        background: ${headerBg};
-        color: ${headerColor};
-        padding: 12px 16px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      ">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 18px;">${recalled.length > 0 ? '⚠️' : caution.length > 0 ? '⚠️' : '✅'}</span>
-          <span style="font-weight: 700; font-size: 14px;">BiteWise Cart Check</span>
-        </div>
-        <div style="
-          background: rgba(255,255,255,0.25);
-          padding: 2px 10px;
-          border-radius: 12px;
-          font-size: 13px;
-          font-weight: 700;
-        ">${flaggedCount}/${totalItems}</div>
-      </div>
-      <div style="padding: 14px 16px; max-height: 400px; overflow-y: auto;">
-        ${itemsHtml}
-      </div>
-    </div>
-  `;
-}
-
-function injectCartCard(html) {
-  const existing = document.getElementById("bitewise-cart-card");
-  if (existing) existing.remove();
-
-  const container = document.createElement("div");
-  container.id = "bitewise-cart-card";
-  container.style.cssText = "position: fixed; bottom: 20px; left: 20px; z-index: 99999;";
-  container.innerHTML = html;
-
-  document.body.appendChild(container);
-}
-
-function injectCartLoading() {
-  const existing = document.getElementById("bitewise-cart-card");
-  if (existing) existing.remove();
-
-  const container = document.createElement("div");
-  container.id = "bitewise-cart-card";
-  container.style.cssText = "position: fixed; bottom: 20px; left: 20px; z-index: 99999;";
-  container.innerHTML = `
-    <div style="
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      max-width: 360px;
-      margin: 16px;
-    ">
-      <span style="font-size: 18px;">🔍</span>
-      <span style="font-weight: 600; font-size: 14px; color: #475569;">BiteWise: Scanning cart items...</span>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-}
-
-async function runCartPage() {
-  const items = extractCartItems();
-  console.log(`🛒 BiteWise: Found ${items.length} items in cart`);
-
-  if (items.length === 0) {
-    console.log("⚠️ BiteWise: No cart items found");
-    return;
-  }
-
-  injectCartLoading();
-
-  const results = [];
-
-  for (const item of items) {
-    console.log(`  → Checking: ${item.fullName}`);
-    const result = await checkRecalls("", item.fullName, "");
-
-    if (result && result.matches && result.matches.length > 0) {
-      const highMatch = result.matches.find(m => m.match_level === "high");
-      const warningMatch = result.matches.find(m => m.match_level === "warning");
-
-      if (highMatch) {
-        results.push({ name: item.fullName, level: "high", match: highMatch });
-      } else if (warningMatch) {
-        results.push({ name: item.fullName, level: "warning", match: warningMatch });
-      }
-    }
-  }
-
-  console.log(`🛒 BiteWise: ${results.length} flagged out of ${items.length} items`);
-
-  const cardHtml = buildCartCard(results, items.length);
-  injectCartCard(cardHtml);
-}
-
-// ========== PAGE DETECTION & ROUTING ==========
-
-function isProductPage() {
-  return window.location.pathname.includes("/products/");
-}
-
-function isCartPage() {
-  return window.location.href.includes("cart_id=") || window.location.pathname.includes("/storefront");
-}
-
-function route() {
-  // Clean up previous UI
-  const banner = document.getElementById("bitewise-banner");
-  if (banner) banner.remove();
-  const card = document.getElementById("bitewise-cart-card");
-  if (card) card.remove();
-
-  if (isProductPage()) {
-    console.log("🔍 BiteWise: Product page detected");
-    tryExtractProduct();
-  } else if (isCartPage()) {
-    console.log("🛒 BiteWise: Cart page detected");
-    tryExtractCart();
-  }
-}
-
-// Retry logic for product pages (SPA — DOM may not be ready)
-let productAttempts = 0;
+// Retry logic and SPA navigation
+let currentUrl = window.location.href;
+let attempts = 0;
 const maxAttempts = 5;
 
-function tryExtractProduct() {
+function tryExtract() {
   const nameEl = document.querySelector("h1 span.e-1r7vnds");
-  if (nameEl || productAttempts >= maxAttempts) {
-    productAttempts = 0;
-    runProductPage();
+  if (nameEl || attempts >= maxAttempts) {
+    attempts = 0;
+    run();
   } else {
-    productAttempts++;
-    setTimeout(tryExtractProduct, 1000);
+    attempts++;
+    setTimeout(tryExtract, 1000);
   }
 }
 
-// Retry logic for cart pages
-let cartAttempts = 0;
-
-function tryExtractCart() {
-  const cartItems = document.querySelectorAll('div[role="group"].e-b311fy');
-  if (cartItems.length > 0 || cartAttempts >= maxAttempts) {
-    cartAttempts = 0;
-    runCartPage();
-  } else {
-    cartAttempts++;
-    setTimeout(tryExtractCart, 1000);
-  }
+// Only run on product pages
+if (window.location.pathname.includes("/products/")) {
+  tryExtract();
 }
-
-// Initial run
-route();
 
 // Monitor for SPA navigation
-let currentUrl = window.location.href;
-
 const observer = new MutationObserver(() => {
   if (window.location.href !== currentUrl) {
     currentUrl = window.location.href;
-    route();
+    if (currentUrl.includes("/products/")) {
+      attempts = 0;
+      tryExtract();
+    }
   }
 });
 
