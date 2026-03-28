@@ -252,9 +252,8 @@ h1 {
   border: 1px solid var(--line);
   background: linear-gradient(180deg, #fff, #faf6ed);
   padding: 22px 20px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  gap: 16px;
 }
 
 .hero-panel-band span,
@@ -270,6 +269,32 @@ h1 {
 .hero-panel-band span {
   background: white;
   border: 1px solid var(--line);
+  justify-content: center;
+  min-height: 64px;
+  text-align: center;
+  width: 100%;
+}
+
+.tech-band-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.tech-band-heading .panel-label {
+  margin: 0;
+}
+
+.tech-band-text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 0.94rem;
+}
+
+.tech-pill-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .section {
