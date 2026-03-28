@@ -11,11 +11,15 @@ HEADERS = {
 }
 
 FSIS_API_URL = "https://www.fsis.usda.gov/fsis/api/recall/v/1"
-DATA_FILE = "data/fsis_response.json"
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(ROOT_DIR, "data")
+DATA_FILE = os.path.join(DATA_DIR, "fsis_response.json")
+PROCESSED_DATA_FILE = os.path.join(DATA_DIR, "fsis_all_records.json")
 
 
 def fetch_fsis_recalls():
     """Fetch all FSIS recalls in one call"""
+    os.makedirs(DATA_DIR, exist_ok=True)
     response = requests.get(FSIS_API_URL, headers=HEADERS)
     print(f"Status: {response.status_code}")
     print(f"Content-Type: {response.headers.get('Content-Type')}")
@@ -41,6 +45,17 @@ def load_or_fetch():
 
     print(f"{DATA_FILE} empty or missing — fetching from FSIS...")
     return fetch_fsis_recalls()
+
+
+def load_processed_records():
+    """Reuse fully processed FSIS records when available."""
+    if os.path.exists(PROCESSED_DATA_FILE):
+        with open(PROCESSED_DATA_FILE, "r") as f:
+            data = json.load(f)
+        if data and len(data) > 0:
+            print(f"Loaded {len(data)} processed FSIS records from {PROCESSED_DATA_FILE}")
+            return data
+    return None
 
 
 def build_label_url(record):
@@ -106,6 +121,12 @@ def parse_fsis_record(record):
 
 
 if __name__ == "__main__":
+    os.makedirs(DATA_DIR, exist_ok=True)
+    processed_records = load_processed_records()
+    if processed_records is not None:
+        print("Skipping FSIS re-fetch because processed recall data already exists.")
+        raise SystemExit(0)
+
     records = load_or_fetch()
 
     results = []
@@ -117,7 +138,8 @@ if __name__ == "__main__":
             print(f"  ✗ Error on record {i}: {e}")
             results.append({"error": str(e), "raw_record": record})
 
-    with open("data/fsis_all_records.json", "w") as f:
+    output_path = PROCESSED_DATA_FILE
+    with open(output_path, "w") as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
 
-    print(f"Done! Saved {len(results)} records to data/fsis_all_records.json")
+    print(f"Done! Saved {len(results)} records to {output_path}")

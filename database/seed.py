@@ -2,14 +2,18 @@ import sqlite3
 import json
 import os
 
-DB_PATH = "data/bitewise.db"
-SCHEMA_PATH = "database/schema.sql"
-FDA_DATA = "data/fda_all_records.json"
-FSIS_DATA = "data/fsis_all_records.json"
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(ROOT_DIR, "data")
+DB_PATH = os.path.join(DATA_DIR, "bitewise.db")
+SCHEMA_PATH = os.path.join(ROOT_DIR, "database", "schema.sql")
+FDA_DATA = os.path.join(DATA_DIR, "fda_all_records.json")
+FSIS_DATA = os.path.join(DATA_DIR, "fsis_all_records.json")
 
 
 def create_db():
     """Create database from schema file"""
+    os.makedirs(DATA_DIR, exist_ok=True)
+
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
         print(f"Removed existing {DB_PATH}")

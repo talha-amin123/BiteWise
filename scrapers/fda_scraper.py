@@ -10,11 +10,16 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
 }
 
-DATA_FILE = "data/fda_response.json"
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(ROOT_DIR, "data")
+DATA_FILE = os.path.join(DATA_DIR, "fda_response.json")
+PROCESSED_DATA_FILE = os.path.join(DATA_DIR, "fda_all_records.json")
 
 
 def fetch_recall_list():
     """Fetch recall records from FDA API"""
+    os.makedirs(DATA_DIR, exist_ok=True)
+
     url = f"{BASE_URL}/datatables/views/ajax"
     params = {
         "search_api_fulltext": "",
@@ -51,6 +56,17 @@ def load_or_fetch():
 
     print(f"{DATA_FILE} empty or missing — fetching from FDA...")
     return fetch_recall_list()
+
+
+def load_processed_records():
+    """Reuse fully processed FDA records when available."""
+    if os.path.exists(PROCESSED_DATA_FILE):
+        with open(PROCESSED_DATA_FILE, "r") as f:
+            data = json.load(f)
+        if data and len(data) > 0:
+            print(f"Loaded {len(data)} processed FDA records from {PROCESSED_DATA_FILE}")
+            return data
+    return None
 
 
 def parse_list_record(record):
@@ -175,6 +191,12 @@ def parse_detail_page(url):
 
 
 if __name__ == "__main__":
+    os.makedirs(DATA_DIR, exist_ok=True)
+    processed_records = load_processed_records()
+    if processed_records is not None:
+        print("Skipping FDA re-scrape because processed recall data already exists.")
+        raise SystemExit(0)
+
     records = load_or_fetch()
 
     # Only process first 3 for testing
@@ -196,7 +218,8 @@ if __name__ == "__main__":
 
         time.sleep(1)
 
-    with open("data/fda_all_records.json", "w") as f:
+    output_path = PROCESSED_DATA_FILE
+    with open(output_path, "w") as f:
         json.dump(results, f, indent=4, ensure_ascii=False)
 
-    print(f"\nDone! Saved {len(results)} records to data/fda_all_records.json")
+    print(f"\nDone! Saved {len(results)} records to {output_path}")

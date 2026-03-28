@@ -3,15 +3,35 @@
 
 const API_URL = "http://127.0.0.1:5000/check";
 
+function textFromSelectors(selectors) {
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el && el.textContent && el.textContent.trim()) {
+      return el.textContent.trim();
+    }
+  }
+  return null;
+}
+
 function extractProductData() {
-  const nameEl = document.querySelector("h1 span.e-1r7vnds");
-  const productName = nameEl ? nameEl.textContent.trim() : null;
+  const productName = textFromSelectors([
+    "h1 span.e-1r7vnds",
+    "h1",
+    "[data-testid='product-details-product-name']",
+    "[data-testid='item-details-name']",
+  ]);
 
-  const brandEl = document.querySelector("a.e-1451bcu span.e-10iahqc");
-  const brand = brandEl ? brandEl.textContent.trim() : null;
+  const brand = textFromSelectors([
+    "a.e-1451bcu span.e-10iahqc",
+    "[data-testid='product-details-brand-name']",
+    "[data-testid='item-details-brand']",
+  ]);
 
-  const sizeEl = document.querySelector("span.e-f17zur");
-  const size = sizeEl ? sizeEl.textContent.trim() : null;
+  const size = textFromSelectors([
+    "span.e-f17zur",
+    "[data-testid='product-pack-size']",
+    "[data-testid='item-details-size']",
+  ]);
 
   return { productName, brand, size };
 }
@@ -23,6 +43,17 @@ function formatDate(dateStr) {
   if (parts.length !== 3) return dateStr;
   const d = new Date(parts[0], parts[1] - 1, parts[2]);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatRecallAge(ageDays) {
+  if (ageDays === null || ageDays === undefined || Number.isNaN(Number(ageDays))) {
+    return "Age unavailable";
+  }
+
+  const days = Number(ageDays);
+  if (days === 0) return "Reported today";
+  if (days === 1) return "1 day old";
+  return `${days} days old`;
 }
 
 function injectBanner(level, recallInfo, instacartBrand) {
@@ -57,7 +88,10 @@ function injectBanner(level, recallInfo, instacartBrand) {
               RECALL ALERT — ${recallInfo.recall_source}
             </div>
             <div style="opacity: 0.95; font-size: 13px; font-weight: 600;">
-              ${recallInfo.recall_reason} • ${displayBrand} • ${formatDate(recallInfo.recall_date)}
+              ${recallInfo.recall_reason} • ${displayBrand}
+            </div>
+            <div style="opacity: 0.92; font-size: 12px; font-weight: 700; margin-top: 4px;">
+              Reported ${formatDate(recallInfo.recall_date)} • ${formatRecallAge(recallInfo.recall_age_days)}
             </div>
           </div>
         </div>
@@ -106,7 +140,10 @@ function injectBanner(level, recallInfo, instacartBrand) {
               CAUTION — ${displayBrand} has active recalls
             </div>
             <div style="opacity: 0.95; font-size: 13px; font-weight: 600;">
-              This specific product may not be affected • ${recallInfo.recall_reason} • ${formatDate(recallInfo.recall_date)}
+              This specific product may not be affected • ${recallInfo.recall_reason}
+            </div>
+            <div style="opacity: 0.92; font-size: 12px; font-weight: 700; margin-top: 4px;">
+              Reported ${formatDate(recallInfo.recall_date)} • ${formatRecallAge(recallInfo.recall_age_days)}
             </div>
           </div>
         </div>
@@ -176,16 +213,32 @@ function injectBanner(level, recallInfo, instacartBrand) {
   banner.querySelector(".bitewise-close").addEventListener("click", () => banner.remove());
 }
 
-function injectLoadingBanner() {
+function injectStatusBanner(message, tone = "info") {
   const existing = document.getElementById("bitewise-banner");
   if (existing) existing.remove();
 
+  const palette = {
+    info: {
+      background: "#f8fafc",
+      color: "#475569",
+      border: "#e2e8f0",
+      icon: "🔍",
+    },
+    error: {
+      background: "#fef2f2",
+      color: "#991b1b",
+      border: "#fecaca",
+      icon: "⚠️",
+    },
+  };
+
+  const style = palette[tone] || palette.info;
   const banner = document.createElement("div");
   banner.id = "bitewise-banner";
   banner.innerHTML = `
     <div style="
-      background: #f8fafc;
-      color: #475569;
+      background: ${style.background};
+      color: ${style.color};
       padding: 10px 24px;
       display: flex;
       align-items: center;
@@ -193,12 +246,22 @@ function injectLoadingBanner() {
       gap: 8px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid ${style.border};
       position: relative;
       z-index: 9999;
     ">
-      <span style="font-size: 16px;">🔍</span>
-      <span style="font-weight: 600;">BiteWise: Checking for recalls...</span>
+      <span style="font-size: 16px;">${style.icon}</span>
+      <span style="font-weight: 600;">${message}</span>
+      <button class="bitewise-close" style="
+        background: none;
+        border: none;
+        color: ${style.color};
+        font-size: 16px;
+        cursor: pointer;
+        position: absolute;
+        right: 24px;
+        opacity: 0.6;
+      ">✕</button>
     </div>
   `;
 
@@ -208,6 +271,12 @@ function injectLoadingBanner() {
   } else {
     document.body.prepend(banner);
   }
+
+  banner.querySelector(".bitewise-close").addEventListener("click", () => banner.remove());
+}
+
+function injectLoadingBanner() {
+  injectStatusBanner("BiteWise: Checking for recalls...", "info");
 }
 
 async function checkRecalls(data) {
@@ -221,11 +290,13 @@ async function checkRecalls(data) {
         size: data.size,
       }),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return { error: `API request failed with status ${response.status}` };
+    }
     return await response.json();
   } catch (err) {
     console.error("BiteWise: Could not reach API —", err.message);
-    return null;
+    return { error: "Could not reach the local BiteWise API. Start api/app.py and refresh the page." };
   }
 }
 
@@ -235,6 +306,7 @@ async function run() {
 
   if (!data.productName) {
     console.log("⚠️ BiteWise: Could not find product info on this page");
+    injectStatusBanner("BiteWise: Could not read this Instacart product page. The page structure may have changed.", "error");
     return;
   }
 
@@ -243,8 +315,12 @@ async function run() {
   const result = await checkRecalls(data);
 
   if (!result) {
-    const existing = document.getElementById("bitewise-banner");
-    if (existing) existing.remove();
+    injectStatusBanner("BiteWise: No response received from the recall service.", "error");
+    return;
+  }
+
+  if (result.error) {
+    injectStatusBanner(`BiteWise: ${result.error}`, "error");
     return;
   }
 
@@ -275,7 +351,10 @@ let attempts = 0;
 const maxAttempts = 5;
 
 function tryExtract() {
-  const nameEl = document.querySelector("h1 span.e-1r7vnds");
+  const nameEl = document.querySelector("h1 span.e-1r7vnds")
+    || document.querySelector("h1")
+    || document.querySelector("[data-testid='product-details-product-name']")
+    || document.querySelector("[data-testid='item-details-name']");
   if (nameEl || attempts >= maxAttempts) {
     attempts = 0;
     run();

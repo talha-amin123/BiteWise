@@ -1,3 +1,7 @@
 venv/
-data/
+__pycache__/
+*.pyc
+.DS_Store
+data/*
 item_list.txt
+!data/.gitkeep
