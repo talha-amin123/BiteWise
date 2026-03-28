@@ -4,6 +4,10 @@ BiteWise is a full-stack food recall detection tool that helps online grocery sh
 
 This project demonstrates end-to-end product development across data ingestion, normalization, fuzzy matching, backend API design, and browser extension development.
 
+Project showcase:
+
+- GitHub Pages site: [BiteWise Project Page](https://talha-amin123.github.io/BiteWise/)
+
 ## Why It Matters
 
 Food recall data is publicly available, but it is fragmented across multiple government sources and is not surfaced where many consumers actually make purchasing decisions. BiteWise closes that gap by bringing recall intelligence to the point of purchase.

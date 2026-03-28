@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BiteWise | Food Recall Detection for Online Grocery Shopping</title>
+    <meta
+      name="description"
+      content="BiteWise is a full-stack food recall detection tool that surfaces FDA and USDA FSIS recall warnings directly on Instacart product pages."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <nav class="topbar">
+          <div class="brand-lockup">
+            <span class="brand-mark">BW</span>
+            <span class="brand-name">BiteWise</span>
+          </div>
+          <div class="topbar-links">
+            <a href="https://github.com/talha-amin123/BiteWise" target="_blank" rel="noreferrer">GitHub Repo</a>
+            <a href="#demo">Demo</a>
+            <a href="#architecture">How It Works</a>
+          </div>
+        </nav>
+
+        <section class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Portfolio Project</p>
+            <h1>Helping online grocery shoppers spot recalled food before checkout.</h1>
+            <p class="hero-text">
+              BiteWise is a full-stack product that turns fragmented government recall data into
+              real-time shopping alerts. It scrapes FDA and USDA FSIS recall records, normalizes
+              them into a searchable database, scores product similarity through a matching API, and
+              displays warnings directly on Instacart product pages.
+            </p>
+            <div class="cta-row">
+              <a class="button button-primary" href="https://github.com/talha-amin123/BiteWise" target="_blank" rel="noreferrer">View Repository</a>
+              <a class="button button-secondary" href="#demo">See Product Demo</a>
+            </div>
+            <ul class="hero-stats">
+              <li>
+                <strong>Data pipeline</strong>
+                <span>FDA scraping + FSIS API ingestion</span>
+              </li>
+              <li>
+                <strong>Matching system</strong>
+                <span>Fuzzy scoring with guardrails and freshness filtering</span>
+              </li>
+              <li>
+                <strong>User experience</strong>
+                <span>Chrome extension warnings on live Instacart product pages</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="hero-panel">
+            <div class="hero-panel-card">
+              <p class="panel-label">Project Snapshot</p>
+              <h2>What this showcases</h2>
+              <ul class="panel-list">
+                <li>Problem framing around consumer safety and point-of-purchase UX</li>
+                <li>End-to-end implementation across scraping, storage, API design, and frontend delivery</li>
+                <li>Practical matching tradeoffs between recall coverage and false-positive reduction</li>
+              </ul>
+            </div>
+            <div class="hero-panel-band">
+              <span>Python</span>
+              <span>Flask</span>
+              <span>SQLite</span>
+              <span>RapidFuzz</span>
+              <span>Chrome Extension</span>
+            </div>
+          </div>
+        </section>
+      </header>
+
+      <main>
+        <section class="section section-problem" id="problem">
+          <div class="section-heading">
+            <p class="eyebrow">The Problem</p>
+            <h2>Recall information exists, but shoppers rarely see it where they make decisions.</h2>
+          </div>
+          <div class="problem-grid">
+            <article class="info-card accent-orange">
+              <h3>Fragmented public data</h3>
+              <p>
+                Recall notices are published by multiple agencies in different formats, making them
+                hard to unify and hard for consumers to monitor consistently.
+              </p>
+            </article>
+            <article class="info-card accent-green">
+              <h3>No in-context warning</h3>
+              <p>
+                Online grocery platforms usually do not surface recall information directly on
+                product pages, even though that is where the buying decision happens.
+              </p>
+            </article>
+            <article class="info-card accent-ink">
+              <h3>Messy product matching</h3>
+              <p>
+                Retail product names do not perfectly match recall wording, so a useful solution
+                needs more than exact string comparison.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section section-solution">
+          <div class="section-heading">
+            <p class="eyebrow">The Solution</p>
+            <h2>BiteWise turns recall records into a real-time product safety signal.</h2>
+          </div>
+          <div class="solution-layout">
+            <div class="solution-copy">
+              <p>
+                I built BiteWise as a local full-stack prototype that connects public recall data to
+                the online shopping experience. The system collects current recall records, stores
+                them in a normalized SQLite database, exposes a matching API, and lets a browser
+                extension flag relevant products directly on Instacart pages.
+              </p>
+              <p>
+                The matching logic combines fuzzy similarity with practical guardrails such as
+                company-name downweighting, distinctive token overlap, size checks, and a 180-day
+                freshness window to reduce false positives.
+              </p>
+            </div>
+            <aside class="solution-callout">
+              <p class="callout-label">Outcome</p>
+              <p class="callout-text">
+                A shopper can see whether a product appears safe, caution-worthy, or strongly tied
+                to an active recall without leaving the product page.
+              </p>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section section-demo" id="demo">
+          <div class="section-heading">
+            <p class="eyebrow">Product Demo</p>
+            <h2>Three shopper-facing outcomes inside the browser.</h2>
+          </div>
+
+          <div class="gallery-grid">
+            <article class="gallery-card danger-card">
+              <img src="./assets/red_banner_placeholder.png" alt="BiteWise red recall alert banner on an Instacart page" />
+              <div class="gallery-copy">
+                <span class="pill pill-danger">High-confidence alert</span>
+                <h3>Red banner</h3>
+                <p>
+                  A strong match between the product and an active recall. The shopper gets an
+                  immediate warning, a recall date, an age indicator, and a direct link to the
+                  official recall notice.
+                </p>
+              </div>
+            </article>
+
+            <article class="gallery-card caution-card">
+              <img src="./assets/yellow_banner_placeholder.png" alt="BiteWise yellow caution banner on an Instacart page" />
+              <div class="gallery-copy">
+                <span class="pill pill-caution">Brand-level caution</span>
+                <h3>Yellow banner</h3>
+                <p>
+                  A meaningful but weaker match. This warns the shopper that the brand is linked to
+                  a recent recall even if the exact product evidence is less certain.
+                </p>
+              </div>
+            </article>
+
+            <article class="gallery-card safe-card">
+              <img src="./assets/green_banner_placeholder.png" alt="BiteWise green safe banner on an Instacart page" />
+              <div class="gallery-copy">
+                <span class="pill pill-safe">No active match</span>
+                <h3>Green banner</h3>
+                <p>
+                  When BiteWise does not find a relevant active recall, the extension confirms that
+                  no active recall match was found for the current product.
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section section-architecture" id="architecture">
+          <div class="section-heading">
+            <p class="eyebrow">How It Works</p>
+            <h2>A straightforward pipeline from public recalls to in-browser alerts.</h2>
+          </div>
+
+          <div class="architecture-frame">
+            <img src="./assets/architecture_placeholder.png" alt="BiteWise system architecture diagram" />
+          </div>
+
+          <div class="process-grid">
+            <article class="step-card">
+              <span class="step-number">01</span>
+              <h3>Collect recall data</h3>
+              <p>FDA recall records are scraped from the web, while FSIS records are pulled through a public API.</p>
+            </article>
+            <article class="step-card">
+              <span class="step-number">02</span>
+              <h3>Normalize and store</h3>
+              <p>Recall data is cleaned and loaded into SQLite with separate recall and product tables.</p>
+            </article>
+            <article class="step-card">
+              <span class="step-number">03</span>
+              <h3>Match products</h3>
+              <p>The Flask API compares Instacart products against recent recall records using fuzzy scoring and rule-based safeguards.</p>
+            </article>
+            <article class="step-card">
+              <span class="step-number">04</span>
+              <h3>Alert in context</h3>
+              <p>The Chrome extension injects a clear status banner directly into the shopping page.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section section-tech">
+          <div class="section-heading">
+            <p class="eyebrow">Technologies</p>
+            <h2>Built as a compact full-stack system.</h2>
+          </div>
+
+          <div class="tech-grid">
+            <article class="stack-card">
+              <h3>Data ingestion</h3>
+              <p>Python, Requests, BeautifulSoup</p>
+            </article>
+            <article class="stack-card">
+              <h3>Storage</h3>
+              <p>SQLite with a normalized recall and product schema</p>
+            </article>
+            <article class="stack-card">
+              <h3>API</h3>
+              <p>Flask and Flask-CORS</p>
+            </article>
+            <article class="stack-card">
+              <h3>Matching</h3>
+              <p>RapidFuzz plus custom heuristics and guardrails</p>
+            </article>
+            <article class="stack-card">
+              <h3>Frontend delivery</h3>
+              <p>Chrome Extension (Manifest V3) and vanilla JavaScript</p>
+            </article>
+            <article class="stack-card">
+              <h3>Quality</h3>
+              <p>Unit tests for matcher behavior and API responses</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section section-scale">
+          <div class="section-heading">
+            <p class="eyebrow">How It Can Scale</p>
+            <h2>The prototype is local today, but the architecture can grow.</h2>
+          </div>
+          <div class="scale-grid">
+            <article class="info-card accent-green">
+              <h3>Broader retailer support</h3>
+              <p>Extend the browser layer to other grocery and e-commerce platforms with platform-specific selectors.</p>
+            </article>
+            <article class="info-card accent-orange">
+              <h3>Automated refresh jobs</h3>
+              <p>Move scraping and ingestion to scheduled background jobs so recall data stays continuously updated.</p>
+            </article>
+            <article class="info-card accent-ink">
+              <h3>Production deployment</h3>
+              <p>Swap SQLite for a managed database, host the API, and precompute/cache recall candidates for faster lookups.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>BiteWise was built as a portfolio project focused on consumer safety, product thinking, and end-to-end engineering execution.</p>
+        <a href="https://github.com/talha-amin123/BiteWise" target="_blank" rel="noreferrer">Explore the code on GitHub</a>
+      </footer>
+    </div>
+  </body>
+</html>
